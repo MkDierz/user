@@ -10,18 +10,18 @@ async function profile(req, res, next) {
   const { user } = req;
   const data = Object;
 
-  data.found = await prisma.user.findUnique({
-    where: { id: user.id },
-    include: { Profile: true },
-  });
-  if (data.found) {
-    return res.send({ ...data.found });
-  }
-
   try {
+    data.found = await prisma.user.findUnique({
+      where: { id: user.id },
+      include: { Profile: true },
+    });
+    if (data.found) {
+      return res.send({ ...data.found });
+    }
     data.created = await prisma.user.create({
       data: {
         ...exclude(user, ['iat', 'exp']),
+        name: user.username,
         Profile: {
           create: {},
         },
@@ -31,8 +31,7 @@ async function profile(req, res, next) {
       },
     });
   } catch (e) {
-    const errorMessage = errorHandler.prisma(e);
-    return next(httpError.Conflict({ detail: errorMessage, field: e.meta.target }));
+    return errorHandler.prismaWrapper(e, next);
   }
   return res.send({ ...data.created });
 }
@@ -87,6 +86,7 @@ async function updateProfile(req, res, next) {
       create: {
         id: user.id,
         ...data.userData,
+        name: data.userData.username,
       },
     });
     data.profile = await prisma.profile.upsert({
@@ -102,8 +102,7 @@ async function updateProfile(req, res, next) {
       },
     });
   } catch (e) {
-    const errorMessage = errorHandler.prisma(e);
-    return next(httpError.Conflict({ detail: errorMessage, field: e?.meta?.target }));
+    return errorHandler.prismaWrapper(e, next);
   }
   return res.send({ user: data.user, profile: data.profile });
 }
@@ -113,40 +112,44 @@ async function sendFriendRequest(req, res, next) {
   const { username } = req.body;
   const data = Object;
 
-  data.receiver = await prisma.user.findUnique({
-    where: { username },
-  });
-  if (!data.receiver) {
-    return next(httpError.NotFound('user not found'));
-  }
+  try {
+    data.receiver = await prisma.user.findUnique({
+      where: { username },
+    });
+    if (!data.receiver) {
+      return next(httpError.NotFound('user not found'));
+    }
 
-  data.sender = await prisma.user.findUnique({
-    where: { id: user.id },
-  });
+    data.sender = await prisma.user.findUnique({
+      where: { id: user.id },
+    });
 
-  if (data.receiver.username === data.sender.username) {
-    return next(httpError.BadRequest());
-  }
+    if (data.receiver.username === data.sender.username) {
+      return next(httpError.BadRequest());
+    }
 
-  data.request = await prisma.friendRequest.findFirst({
-    where: {
-      senderId: data.sender.id,
-      receiverId: data.receiver.id,
-    },
-  });
-
-  data.message = 'friend request already sent';
-
-  if (!data.request) {
-    data.message = 'friend request sent';
-    data.request = await prisma.friendRequest.create(
-      {
-        data: {
-          sender: { connect: { id: data.sender.id } },
-          receiver: { connect: { id: data.receiver.id } },
-        },
+    data.request = await prisma.friendRequest.findFirst({
+      where: {
+        senderId: data.sender.id,
+        receiverId: data.receiver.id,
       },
-    );
+    });
+
+    data.message = 'friend request already sent';
+
+    if (!data.request) {
+      data.message = 'friend request sent';
+      data.request = await prisma.friendRequest.create(
+        {
+          data: {
+            sender: { connect: { id: data.sender.id } },
+            receiver: { connect: { id: data.receiver.id } },
+          },
+        },
+      );
+    }
+  } catch (e) {
+    return errorHandler.prismaWrapper(e, next);
   }
 
   return res.send({ ...data });
@@ -175,18 +178,22 @@ async function friendRequestSent(req, res, next) {
   const { user } = req;
 
   const data = Object;
-  data.sender = await prisma.user.findUnique({
-    where: { id: user.id },
-  });
-  if (!data.sender) { return next(httpError.NotFound('user not found')); }
-  data.request = await prisma.friendRequest.findMany({
-    where: {
-      senderId: data.sender.id,
-    },
-    include: {
-      sender: true,
-    },
-  });
+  try {
+    data.sender = await prisma.user.findUnique({
+      where: { id: user.id },
+    });
+    if (!data.sender) { return next(httpError.NotFound('user not found')); }
+    data.request = await prisma.friendRequest.findMany({
+      where: {
+        senderId: data.sender.id,
+      },
+      include: {
+        sender: true,
+      },
+    });
+  } catch (e) {
+    return errorHandler.prismaWrapper(e, next);
+  }
   return res.send({ ...data.request });
 }
 
@@ -195,68 +202,76 @@ async function updateFriendRequest(req, res, next) {
   const { username, status } = req.body;
   const data = Object;
 
-  data.receiver = await prisma.user.findUnique({
-    where: { id: user.id },
-  });
-  data.sender = await prisma.user.findUnique({
-    where: { username },
-  });
-  if (!data.sender) { return next(httpError.NotFound('user not found')); }
-  data.request = await prisma.friendRequest.findFirst({
-    where: {
-      receiverId: data.receiver.id,
-      senderId: data.sender.id,
-    },
-  });
-  if (!data.request) { return next(httpError.NotFound('request not found')); }
-  data.requestUpdated = await prisma.friendRequest.update({
-    where: {
-      id: data.request.id,
-    },
-    data: {
-      status,
-    },
-  });
-  if (!data.request) { return next(httpError.InternalServerError('unable to accept friend')); }
-  if (status === 'ACCEPTED') {
-    await prisma.$transaction([
-      prisma.friendList.deleteMany({
-        where: {
-          friendId: [data.sender.id, data.receiverId.id],
-          friendOfId: [data.sender.id, data.receiverId.id],
-        },
-      }),
-      prisma.friendList.createMany({
-        data: [
-          { friendId: data.sender.id, friendOfId: data.receiver.id },
-          { friendId: data.receiver.id, friendOfId: data.sender.id },
-        ],
-      }),
-    ]);
-  }
-  if (status === 'UNACCEPTED') {
-    await prisma.$transaction([
-      prisma.friendList.deleteMany({
-        where: {
-          friendId: [data.sender.id, data.receiverId.id],
-          friendOfId: [data.sender.id, data.receiverId.id],
-        },
-      }),
-    ]);
+  try {
+    data.receiver = await prisma.user.findUnique({
+      where: { id: user.id },
+    });
+    data.sender = await prisma.user.findUnique({
+      where: { username },
+    });
+    if (!data.sender) { return next(httpError.NotFound('user not found')); }
+    data.request = await prisma.friendRequest.findFirst({
+      where: {
+        receiverId: data.receiver.id,
+        senderId: data.sender.id,
+      },
+    });
+    if (!data.request) { return next(httpError.NotFound('request not found')); }
+    data.requestUpdated = await prisma.friendRequest.update({
+      where: {
+        id: data.request.id,
+      },
+      data: {
+        status,
+      },
+    });
+    if (!data.request) { return next(httpError.InternalServerError('unable to accept friend')); }
+    if (status === 'ACCEPTED') {
+      await prisma.$transaction([
+        prisma.friendList.deleteMany({
+          where: {
+            friendId: [data.sender.id, data.receiverId.id],
+            friendOfId: [data.sender.id, data.receiverId.id],
+          },
+        }),
+        prisma.friendList.createMany({
+          data: [
+            { friendId: data.sender.id, friendOfId: data.receiver.id },
+            { friendId: data.receiver.id, friendOfId: data.sender.id },
+          ],
+        }),
+      ]);
+    }
+    if (status === 'UNACCEPTED') {
+      await prisma.$transaction([
+        prisma.friendList.deleteMany({
+          where: {
+            friendId: [data.sender.id, data.receiverId.id],
+            friendOfId: [data.sender.id, data.receiverId.id],
+          },
+        }),
+      ]);
+    }
+  } catch (e) {
+    return errorHandler.prismaWrapper(e, next);
   }
   return res.send({ ...data.requestUpdated });
 }
 
-async function friendList(req, res) {
+async function friendList(req, res, next) {
   const { user } = req;
-
   const data = Object;
-  data.friends = await prisma.friendList.findMany({
-    where: { friendOfId: user.id },
-    include: {
-      friend: true,
-    },
-  });
+
+  try {
+    data.friends = await prisma.friendList.findMany({
+      where: { friendOfId: user.id },
+      include: {
+        friend: true,
+      },
+    });
+  } catch (e) {
+    return errorHandler.prismaWrapper(e, next);
+  }
   return res.send({ ...data.friends });
 }
 
