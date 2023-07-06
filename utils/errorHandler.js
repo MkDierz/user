@@ -30,9 +30,11 @@ function prisma(e) {
       default:
         return `Unhandled Prisma error: ${e.code}`;
     }
-  } else {
-    throw e;
   }
+  if (e instanceof Prisma.PrismaClientValidationError) {
+    return 'validation error, might have missing or unacceptable input';
+  }
+  throw e;
 }
 module.exports = {
   validation,

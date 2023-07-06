@@ -5,7 +5,7 @@ const httpErrors = require('http-errors');
 const logger = require('morgan');
 const path = require('path');
 
-const indexRouter = require('./src/app');
+const indexRouter = require('./src/routes');
 
 const app = express();
 
@@ -23,6 +23,7 @@ app.use((req, res, next) => {
 });
 
 // error handler
+// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   // set locals, only providing error in development
   res.locals.message = err.message;

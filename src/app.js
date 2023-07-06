@@ -1,105 +1,274 @@
 const { PrismaClient } = require('@prisma/client');
-const { Router } = require('express');
-const { body } = require('express-validator');
 const { httpError } = require('../config');
 const errorHandler = require('../utils/errorHandler');
+const { exclude, clean, filterObject } = require('../utils/dro');
+const { auth } = require('../utils/services');
 
 const prisma = new PrismaClient();
-const router = Router();
 
-function exclude(data, keys) {
-  const returnValue = { ...data };
-  keys.forEach((key) => {
-    delete returnValue[key];
+async function profile(req, res, next) {
+  const { user } = req;
+  const data = Object;
+
+  data.found = await prisma.user.findUnique({
+    where: { id: user.id },
+    include: { Profile: true },
   });
-  return returnValue;
-}
+  if (data.found) {
+    return res.send({ ...data.found });
+  }
 
-async function register(req, res, next) {
-  const data = { ...req.body };
-  let user;
-  data.password = hashSync(data.password, 8);
   try {
-    user = exclude(await prisma.user.create({ data }), ['password']);
+    data.created = await prisma.user.create({
+      data: {
+        ...exclude(user, ['iat', 'exp']),
+        Profile: {
+          create: {},
+        },
+      },
+      include: {
+        Profile: true,
+      },
+    });
   } catch (e) {
     const errorMessage = errorHandler.prisma(e);
     return next(httpError.Conflict({ detail: errorMessage, field: e.meta.target }));
   }
-  return res.send({ ...user, message: 'User created' });
+  return res.send({ ...data.created });
 }
 
-async function login(req, res, next) {
-  const { email, password } = req.body;
-
-  const user = await prisma.user.findUnique({ where: { email } });
-
-  if (!user) {
-    return next(httpError.NotFound('User not registered'));
+async function updateProfile(req, res, next) {
+  const { user } = req;
+  const body = clean(req.body);
+  if (Object.keys(body).length === 0) {
+    return next(httpError.BadRequest());
   }
+  const data = Object;
 
-  const checkPassword = compareSync(password, user.password);
-  if (!checkPassword) {
-    return next(httpError.Unauthorized('Email address or password not valid'));
+  const authField = ['username', 'password', 'email'];
+  const profileField = ['bio', 'location'];
+  const userField = ['username', 'email', 'name'];
+
+  data.auth = filterObject(authField, body, data);
+  if (!(Object.keys({ ...data.auth }).length === 0)) {
+    data.auth = await auth.update({ ...data.auth }, req.headers.authorization);
   }
-
-  const token = signToken(exclude(user, ['password', 'createdAt', 'updatedAt']));
-  return res.send({ message: 'authorized', ...token });
+  if (data.auth.status !== 200) {
+    return next(httpError.BadRequest());
+  }
+  data.profileData = filterObject(profileField, body);
+  data.userData = {
+    ...filterObject(userField, user),
+    ...filterObject(userField, body),
+  };
+  try {
+    data.user = await prisma.user.upsert({
+      where: {
+        id: user.id,
+      },
+      update: {
+        ...data.userData,
+      },
+      create: {
+        id: user.id,
+        ...data.userData,
+      },
+    });
+    data.profile = await prisma.profile.upsert({
+      where: {
+        userId: user.id,
+      },
+      update: {
+        ...data.profileData,
+      },
+      create: {
+        userId: user.id,
+        ...data.profileData,
+      },
+    });
+  } catch (e) {
+    const errorMessage = errorHandler.prisma(e);
+    return next(httpError.Conflict({ detail: errorMessage, field: e?.meta?.target }));
+  }
+  return res.send({ user: data.user, profile: data.profile });
 }
 
-function verifyAccessTokenHandler(req, res, next) {
-  const { accessToken } = req.body;
+async function sendFriendRequest(req, res, next) {
+  const { user } = req;
+  const { username } = req.body;
+  const data = Object;
 
-  if (tokenBlacklist.getBlacklist().includes(accessToken)) {
-    return next(httpError.Unauthorized('Invalid credentials'));
+  data.receiver = await prisma.user.findUnique({
+    where: { username },
+  });
+  if (!data.receiver) {
+    return next(httpError.NotFound('user not found'));
   }
 
-  const result = verifyAccessToken(accessToken);
+  data.sender = await prisma.user.findUnique({
+    where: { id: user.id },
+  });
 
-  if (result instanceof httpError.HttpError) {
-    return next(result);
+  if (data.receiver.username === data.sender.username) {
+    return next(httpError.BadRequest());
   }
 
-  return res.send(result);
+  data.request = await prisma.friendRequest.findFirst({
+    where: {
+      senderId: data.sender.id,
+      receiverId: data.receiver.id,
+    },
+  });
+
+  data.message = 'friend request already sent';
+
+  if (!data.request) {
+    data.message = 'friend request sent';
+    data.request = await prisma.friendRequest.create(
+      {
+        data: {
+          sender: { connect: { id: data.sender.id } },
+          receiver: { connect: { id: data.receiver.id } },
+        },
+      },
+    );
+  }
+
+  return res.send({ ...data });
 }
 
-function refreshTokenHandler(req, res, next) {
-  const { refreshToken } = req.body;
+async function friendRequest(req, res, next) {
+  const { user } = req;
 
-  if (tokenBlacklist.getBlacklist().includes(refreshToken)) {
-    return next(httpError.Unauthorized('Invalid credentials'));
-  }
-
-  const result = verifyRefreshToken(refreshToken);
-
-  if (result instanceof httpError.HttpError) {
-    return next(result);
-  }
-
-  tokenBlacklist.addBlacklist(refreshToken);
-  const token = signToken(exclude(result, ['exp', 'iat']));
-
-  return res.send(token);
+  const data = Object;
+  data.receiver = await prisma.user.findUnique({
+    where: { id: user.id },
+  });
+  if (!data.receiver) { return next(httpError.NotFound('user not found')); }
+  data.request = await prisma.friendRequest.findMany({
+    where: {
+      receiverId: data.receiver.id,
+    },
+    include: {
+      sender: true,
+    },
+  });
+  return res.send({ ...data.request });
 }
 
-function logout(req, res) {
-  const { accessToken, refreshToken } = req.body;
-  tokenBlacklist.addBlacklist(accessToken);
-  tokenBlacklist.addBlacklist(refreshToken);
-  return res.send({ message: 'User logged out' });
+async function friendRequestSent(req, res, next) {
+  const { user } = req;
+
+  const data = Object;
+  data.sender = await prisma.user.findUnique({
+    where: { id: user.id },
+  });
+  if (!data.sender) { return next(httpError.NotFound('user not found')); }
+  data.request = await prisma.friendRequest.findMany({
+    where: {
+      senderId: data.sender.id,
+    },
+    include: {
+      sender: true,
+    },
+  });
+  return res.send({ ...data.request });
 }
 
-const authFields = [
-  body('email').isEmail().withMessage('valid email required'),
-  body('password').isLength({ min: 6 }).withMessage('minimum password length is 6 characters'),
-];
-const accessTokenField = body('accessToken').notEmpty().withMessage('accessToken required');
-const refreshTokenField = body('refreshToken').notEmpty().withMessage('refreshToken required');
-const logoutFields = [accessTokenField, refreshTokenField];
+async function updateFriendRequest(req, res, next) {
+  const { user } = req;
+  const { username, status } = req.body;
+  const data = Object;
 
-router.post('/register', authFields, errorHandler.validation, register);
-router.post('/login', authFields, errorHandler.validation, login);
-router.post('/verify-token', accessTokenField, errorHandler.validation, verifyAccessTokenHandler);
-router.post('/refresh-token', refreshTokenField, errorHandler.validation, refreshTokenHandler);
-router.post('/logout', logoutFields, errorHandler.validation, logout);
+  data.receiver = await prisma.user.findUnique({
+    where: { id: user.id },
+  });
+  data.sender = await prisma.user.findUnique({
+    where: { username },
+  });
+  if (!data.sender) { return next(httpError.NotFound('user not found')); }
+  data.request = await prisma.friendRequest.findFirst({
+    where: {
+      receiverId: data.receiver.id,
+      senderId: data.sender.id,
+    },
+  });
+  if (!data.request) { return next(httpError.NotFound('request not found')); }
+  data.requestUpdated = await prisma.friendRequest.update({
+    where: {
+      id: data.request.id,
+    },
+    data: {
+      status,
+    },
+  });
+  if (!data.request) { return next(httpError.InternalServerError('unable to accept friend')); }
+  if (status === 'ACCEPTED') {
+    await prisma.$transaction([
+      prisma.friendList.deleteMany({
+        where: {
+          friendId: [data.sender.id, data.receiverId.id],
+          friendOfId: [data.sender.id, data.receiverId.id],
+        },
+      }),
+      prisma.friendList.createMany({
+        data: [
+          { friendId: data.sender.id, friendOfId: data.receiver.id },
+          { friendId: data.receiver.id, friendOfId: data.sender.id },
+        ],
+      }),
+    ]);
+  }
+  if (status === 'UNACCEPTED') {
+    await prisma.$transaction([
+      prisma.friendList.deleteMany({
+        where: {
+          friendId: [data.sender.id, data.receiverId.id],
+          friendOfId: [data.sender.id, data.receiverId.id],
+        },
+      }),
+    ]);
+  }
+  return res.send({ ...data.requestUpdated });
+}
 
-module.exports = router;
+async function friendList(req, res) {
+  const { user } = req;
+
+  const data = Object;
+  data.friends = await prisma.friendList.findMany({
+    where: { friendOfId: user.id },
+    include: {
+      friend: true,
+    },
+  });
+  return res.send({ ...data.friends });
+}
+
+async function findUser(req, res) {
+  const { query } = req.query;
+  // const { user } = req;
+  const data = Object;
+  data.userList = await prisma.user.findMany({
+    where: {
+      username: {
+        search: query,
+      },
+      name: {
+        search: query,
+      },
+    },
+  });
+  return res.send({ ...data.userList });
+}
+
+module.exports = {
+  profile,
+  updateProfile,
+  sendFriendRequest,
+  friendRequest,
+  friendRequestSent,
+  updateFriendRequest,
+  friendList,
+  findUser,
+};
