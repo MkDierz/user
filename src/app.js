@@ -245,21 +245,23 @@ async function friendList(req, res) {
   return res.send({ ...data.friends });
 }
 
-async function findUser(req, res) {
-  const { query } = req.query;
-  // const { user } = req;
+async function findUser(req, res, next) {
+  const { query, id } = req.query;
   const data = Object;
-  data.userList = await prisma.user.findMany({
-    where: {
-      username: {
-        search: query,
+  if ((!query) && (!id)) {
+    return next(httpError.BadRequest());
+  }
+  try {
+    data.userList = await prisma.user.findMany({
+      where: {
+        ...(query && { username: { search: query }, name: { search: query } }),
+        ...(id && { id: { in: id } }),
       },
-      name: {
-        search: query,
-      },
-    },
-  });
-  return res.send({ ...data.userList });
+    });
+  } catch (e) {
+    return errorHandler.prismaWrapper(e, next);
+  }
+  return res.send(data.userList);
 }
 
 module.exports = {

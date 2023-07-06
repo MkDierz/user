@@ -5,7 +5,7 @@ const {
   usernameField,
   updateFriendRequestFields,
   updateProfileField,
-  searchQueryField,
+  searchFields,
 } = require('../utils/validator');
 const {
   profile,
@@ -21,13 +21,16 @@ const {
 const router = Router();
 router.use(checkToken);
 
-router.get('/', profile);
-router.put('/', updateProfileField, errorHandler.validation, updateProfile);
-router.get('/friends', friendList);
+router.get('/', searchFields, errorHandler.validation, findUser);
+
+router.get('/profile', profile);
+router.put('/profile', updateProfileField, errorHandler.validation, updateProfile);
+
+router.get('/friend', friendList);
+
 router.get('/friend-request', friendRequest);
-router.get('/friend-request/sent', friendRequestSent);
-router.post('/friend-request', usernameField, errorHandler.validation, sendFriendRequest);
 router.put('/friend-request', updateFriendRequestFields, errorHandler.validation, updateFriendRequest);
-router.get('/search', searchQueryField, errorHandler.validation, findUser);
+router.post('/friend-request', usernameField, errorHandler.validation, sendFriendRequest);
+router.get('/friend-request/sent', friendRequestSent);
 
 module.exports = router;
