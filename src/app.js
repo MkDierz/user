@@ -1,10 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const { Router } = require('express');
 const { body } = require('express-validator');
-const { hashSync, compareSync } = require('bcryptjs');
 const { httpError } = require('../config');
-const { signToken, verifyAccessToken, verifyRefreshToken } = require('../utils/jwt');
-const { tokenBlacklist } = require('../utils/tokenBlacklist');
 const errorHandler = require('../utils/errorHandler');
 
 const prisma = new PrismaClient();
