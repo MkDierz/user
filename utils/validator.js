@@ -1,5 +1,7 @@
-const { body, query } = require('express-validator');
+const { body, query, param } = require('express-validator');
 
+const idParam = param('id').notEmpty().isNumeric().withMessage('valid id required')
+  .toInt();
 const statusField = body('status').notEmpty().isIn(['ACCEPTED', 'UNACCEPTED']).withMessage('valid status is required');
 const usernameField = body('username').notEmpty().withMessage('username is required');
 const emailField = body('email').isEmail().withMessage('valid email required');
@@ -39,4 +41,5 @@ module.exports = {
   updateProfileField,
   searchQueryField,
   searchFields,
+  idParam,
 };

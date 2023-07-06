@@ -37,6 +37,21 @@ async function profile(req, res, next) {
   return res.send({ ...data.created });
 }
 
+async function profileById(req, res, next) {
+  const { id } = req.params;
+  const data = Object;
+
+  try {
+    data.user = await prisma.user.findUnique({
+      where: { id },
+      include: { Profile: true },
+    });
+  } catch (e) {
+    return errorHandler.prismaWrapper(e, next);
+  }
+  return res.send({ ...data.user });
+}
+
 async function updateProfile(req, res, next) {
   const { user } = req;
   const body = clean(req.body);
@@ -273,4 +288,5 @@ module.exports = {
   updateFriendRequest,
   friendList,
   findUser,
+  profileById,
 };

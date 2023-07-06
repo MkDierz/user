@@ -6,6 +6,7 @@ const {
   updateFriendRequestFields,
   updateProfileField,
   searchFields,
+  idParam,
 } = require('../utils/validator');
 const {
   profile,
@@ -16,6 +17,7 @@ const {
   updateFriendRequest,
   friendList,
   findUser,
+  profileById,
 } = require('./app');
 
 const router = Router();
@@ -25,6 +27,7 @@ router.get('/', searchFields, errorHandler.validation, findUser);
 
 router.get('/profile', profile);
 router.put('/profile', updateProfileField, errorHandler.validation, updateProfile);
+router.get('/profile:id', idParam, errorHandler.validation, profileById);
 
 router.get('/friend', friendList);
 
