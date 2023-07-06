@@ -27,7 +27,7 @@ router.get('/', searchFields, errorHandler.validation, findUser);
 
 router.get('/profile', profile);
 router.put('/profile', updateProfileField, errorHandler.validation, updateProfile);
-router.get('/profile:id', idParam, errorHandler.validation, profileById);
+router.get('/profile/:id', idParam, errorHandler.validation, profileById);
 
 router.get('/friend', friendList);
 
