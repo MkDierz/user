@@ -36,7 +36,13 @@ function prisma(e) {
   }
   throw e;
 }
+
+function prismaWrapper(e, next) {
+  const errorMessage = prisma(e);
+  return next(httpError.Conflict({ detail: errorMessage, field: e?.meta?.target }));
+}
 module.exports = {
   validation,
   prisma,
+  prismaWrapper,
 };
