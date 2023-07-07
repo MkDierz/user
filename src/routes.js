@@ -25,15 +25,14 @@ router.use(checkToken);
 
 router.get('/', searchFields, errorHandler.validation, findUser);
 
-router.get('/profile', profile);
+router.get('/profile', searchFields, errorHandler.validation, profile);
 router.put('/profile', updateProfileField, errorHandler.validation, updateProfile);
 router.get('/profile/:id', idParam, errorHandler.validation, profileById);
 
 router.get('/friend', friendList);
-
-router.get('/friend-request', friendRequest);
-router.put('/friend-request', updateFriendRequestFields, errorHandler.validation, updateFriendRequest);
-router.post('/friend-request', usernameField, errorHandler.validation, sendFriendRequest);
-router.get('/friend-request/sent', friendRequestSent);
+router.get('/friend/request', friendRequest);
+router.put('/friend/request', updateFriendRequestFields, errorHandler.validation, updateFriendRequest);
+router.post('/friend/request', usernameField, errorHandler.validation, sendFriendRequest);
+router.get('/friend/request/sent', friendRequestSent);
 
 module.exports = router;

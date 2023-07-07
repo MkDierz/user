@@ -104,7 +104,7 @@ async function updateProfile(req, res, next) {
   } catch (e) {
     return errorHandler.prismaWrapper(e, next);
   }
-  return res.send({ user: data.user, profile: data.profile });
+  return res.send({ ...data.user, profile: data.profile });
 }
 
 async function sendFriendRequest(req, res, next) {
@@ -151,7 +151,7 @@ async function sendFriendRequest(req, res, next) {
   } catch (e) {
     return errorHandler.prismaWrapper(e, next);
   }
-
+  ['receiver', 'sender'].forEach((e) => delete data[e]);
   return res.send({ ...data });
 }
 
@@ -171,7 +171,7 @@ async function friendRequest(req, res, next) {
       sender: true,
     },
   });
-  return res.send({ ...data.request });
+  return res.send(data.request);
 }
 
 async function friendRequestSent(req, res, next) {
@@ -225,13 +225,21 @@ async function updateFriendRequest(req, res, next) {
         status,
       },
     });
-    if (!data.request) { return next(httpError.InternalServerError('unable to accept friend')); }
+    if (!data.requestUpdated) { return next(httpError.InternalServerError('unable to accept friend')); }
     if (status === 'ACCEPTED') {
       await prisma.$transaction([
         prisma.friendList.deleteMany({
           where: {
-            friendId: [data.sender.id, data.receiverId.id],
-            friendOfId: [data.sender.id, data.receiverId.id],
+            OR: [
+              {
+                friendId: data.sender.id,
+                friendOfId: data.receiver.id,
+              },
+              {
+                friendId: data.receiver.id,
+                friendOfId: data.sender.id,
+              },
+            ],
           },
         }),
         prisma.friendList.createMany({
@@ -243,14 +251,20 @@ async function updateFriendRequest(req, res, next) {
       ]);
     }
     if (status === 'UNACCEPTED') {
-      await prisma.$transaction([
-        prisma.friendList.deleteMany({
-          where: {
-            friendId: [data.sender.id, data.receiverId.id],
-            friendOfId: [data.sender.id, data.receiverId.id],
-          },
-        }),
-      ]);
+      await prisma.friendList.deleteMany({
+        where: {
+          OR: [
+            {
+              friendId: data.sender.id,
+              friendOfId: data.receiver.id,
+            },
+            {
+              friendId: data.receiver.id,
+              friendOfId: data.sender.id,
+            },
+          ],
+        },
+      });
     }
   } catch (e) {
     return errorHandler.prismaWrapper(e, next);
@@ -272,7 +286,7 @@ async function friendList(req, res, next) {
   } catch (e) {
     return errorHandler.prismaWrapper(e, next);
   }
-  return res.send({ ...data.friends });
+  return res.send(data.friends);
 }
 
 async function findUser(req, res, next) {
