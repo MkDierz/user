@@ -305,7 +305,7 @@ async function findUser(req, res, next) {
   } catch (e) {
     return errorHandler.prismaWrapper(e, next);
   }
-  return res.send(data.userList);
+  return res.send(data.userList.map(user => exclude(user, ["email"])));
 }
 
 module.exports = {
