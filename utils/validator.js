@@ -23,12 +23,12 @@ const idQuery = query('id')
 
 const updateFriendRequestFields = [usernameField(), statusField];
 const updateProfileField = [
-  nameField.optional(),
-  usernameField.optional(),
-  emailField.optional(),
-  bioField.optional(),
-  locationField.optional(),
-  passwordField.optional(),
+  nameField().optional(),
+  usernameField().optional(),
+  emailField().optional(),
+  bioField().optional(),
+  locationField().optional(),
+  passwordField().optional(),
 ];
 const searchFields = [
   searchQueryField,
