@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 
 async function profile(req, res, next) {
   const { user } = req;
-  const data = Object;
+  const data = {};
 
   try {
     data.found = await prisma.user.findUnique({
@@ -38,7 +38,7 @@ async function profile(req, res, next) {
 
 async function profileById(req, res, next) {
   const { id } = req.params;
-  const data = Object;
+  const data = {};
 
   try {
     data.user = await prisma.user.findUnique({
@@ -57,7 +57,7 @@ async function updateProfile(req, res, next) {
   if (Object.keys(body).length === 0) {
     return next(httpError.BadRequest());
   }
-  const data = Object;
+  const data = {};
 
   const authField = ['username', 'password', 'email'];
   const profileField = ['bio', 'location'];
@@ -110,7 +110,7 @@ async function updateProfile(req, res, next) {
 async function sendFriendRequest(req, res, next) {
   const { user } = req;
   const { username } = req.body;
-  const data = Object;
+  const data = {};
 
   try {
     data.receiver = await prisma.user.findUnique({
@@ -158,7 +158,7 @@ async function sendFriendRequest(req, res, next) {
 async function friendRequest(req, res, next) {
   const { user } = req;
 
-  const data = Object;
+  const data = {};
   data.receiver = await prisma.user.findUnique({
     where: { id: user.id },
   });
@@ -177,7 +177,7 @@ async function friendRequest(req, res, next) {
 async function friendRequestSent(req, res, next) {
   const { user } = req;
 
-  const data = Object;
+  const data = {};
   try {
     data.sender = await prisma.user.findUnique({
       where: { id: user.id },
@@ -200,7 +200,7 @@ async function friendRequestSent(req, res, next) {
 async function updateFriendRequest(req, res, next) {
   const { user } = req;
   const { username, status } = req.body;
-  const data = Object;
+  const data = {};
 
   try {
     data.receiver = await prisma.user.findUnique({
@@ -274,7 +274,7 @@ async function updateFriendRequest(req, res, next) {
 
 async function friendList(req, res, next) {
   const { user } = req;
-  const data = Object;
+  const data = {};
 
   try {
     data.friends = await prisma.friendList.findMany({
@@ -291,7 +291,7 @@ async function friendList(req, res, next) {
 
 async function findUser(req, res, next) {
   const { query, id } = req.query;
-  const data = Object;
+  const data = {};
   if ((!query) && (!id)) {
     return next(httpError.BadRequest());
   }
