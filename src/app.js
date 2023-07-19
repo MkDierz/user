@@ -66,9 +66,9 @@ async function updateProfile(req, res, next) {
   data.auth = filterObject(authField, body, data);
   if (!(Object.keys({ ...data.auth }).length === 0)) {
     data.auth = await auth.update({ ...data.auth }, req.headers.authorization);
-  }
-  if (data.auth.status !== 200) {
-    return next(httpError.BadRequest());
+    if (data.auth.status !== 200) {
+      return next(httpError.BadRequest());
+    }
   }
   data.profileData = filterObject(profileField, body);
   data.userData = {
@@ -305,7 +305,7 @@ async function findUser(req, res, next) {
   } catch (e) {
     return errorHandler.prismaWrapper(e, next);
   }
-  return res.send(data.userList.map(user => exclude(user, ["email"])));
+  return res.send(data.userList.map((user) => exclude(user, ['email'])));
 }
 
 module.exports = {
