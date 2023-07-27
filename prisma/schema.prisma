@@ -15,10 +15,10 @@ datasource db {
 model User {
   id Int @id @default(autoincrement())
 
-  name     String?
+  name     String
   username String  @unique
   email    String  @unique
-  avatar   String  @default("/defaultProfile.jpg")
+  avatar   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
