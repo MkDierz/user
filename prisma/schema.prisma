@@ -28,6 +28,19 @@ model User {
   friendOf        FriendList[]    @relation("friendOf")
   sentRequest     FriendRequest[] @relation("sentRequest")
   receivedRequest FriendRequest[] @relation("receivedRequest")
+  Config          Config?
+}
+
+model Config {
+  id Int @id @default(autoincrement())
+
+  compress CompressionMethod @default(none)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId Int  @unique
+  user   User @relation(fields: [userId], references: [id])
 }
 
 model Profile {
@@ -73,4 +86,11 @@ enum FriendRequestStatus {
   ACCEPTED
   UNACCEPTED
   PENDING
+}
+
+enum CompressionMethod {
+  full
+  hpack
+  gzip
+  none
 }

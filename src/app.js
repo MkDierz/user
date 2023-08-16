@@ -2,7 +2,6 @@ const { PrismaClient } = require('@prisma/client');
 const { httpError } = require('../config');
 const errorHandler = require('../utils/errorHandler');
 const { exclude, clean, filterObject } = require('../utils/dro');
-const { auth } = require('../utils/services');
 
 const prisma = new PrismaClient();
 
@@ -13,7 +12,7 @@ async function profile(req, res, next) {
   try {
     data.found = await prisma.user.findUnique({
       where: { id: user.id },
-      include: { Profile: true },
+      include: { Profile: true, Config: true },
     });
     if (data.found) {
       return res.send({ ...data.found });
@@ -25,9 +24,13 @@ async function profile(req, res, next) {
         Profile: {
           create: {},
         },
+        Config: {
+          create: {},
+        },
       },
       include: {
         Profile: true,
+        Config: true,
       },
     });
   } catch (e) {
@@ -53,6 +56,7 @@ async function profileById(req, res, next) {
 
 async function updateProfile(req, res, next) {
   const { user } = req;
+  const { authService } = req.services;
   const body = clean(req.body);
   if (Object.keys(body).length === 0) {
     return next(httpError.BadRequest());
@@ -62,19 +66,20 @@ async function updateProfile(req, res, next) {
   const authField = ['username', 'password', 'email'];
   const profileField = ['bio', 'location'];
   const userField = ['username', 'email', 'name'];
+  const configField = ['compress'];
 
   data.auth = filterObject(authField, body, data);
   if (!(Object.keys({ ...data.auth }).length === 0)) {
-    data.auth = await auth.update({ ...data.auth }, req.headers.authorization);
-    if (data.auth.status !== 200) {
-      return next(httpError.BadRequest());
-    }
+    data.auth = await authService
+      .update({ ...data.auth })
+      .catch((e) => next(httpError.BadRequest(e)));
   }
   data.profileData = filterObject(profileField, body);
   data.userData = {
     ...filterObject(userField, user),
     ...filterObject(userField, body),
   };
+  data.configData = filterObject(configField, body);
   try {
     data.user = await prisma.user.upsert({
       where: {
@@ -101,10 +106,22 @@ async function updateProfile(req, res, next) {
         ...data.profileData,
       },
     });
+    data.config = await prisma.config.upsert({
+      where: {
+        userId: user.id,
+      },
+      update: {
+        ...data.configData,
+      },
+      create: {
+        userId: user.id,
+        ...data.configData,
+      },
+    });
   } catch (e) {
     return errorHandler.prismaWrapper(e, next);
   }
-  return res.send({ ...data.user, profile: data.profile });
+  return res.send({ ...data.user, profile: data.profile, config: data.config });
 }
 
 async function sendFriendRequest(req, res, next) {

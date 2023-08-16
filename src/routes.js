@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { checkToken } = require('../utils/middleware');
+const { checkToken, initServices } = require('../utils/middleware');
 const errorHandler = require('../utils/errorHandler');
 const {
   usernameField,
@@ -21,6 +21,7 @@ const {
 } = require('./app');
 
 const router = Router();
+router.use(initServices);
 router.use(checkToken);
 
 router.get('/', searchFields, errorHandler.validation, findUser);
